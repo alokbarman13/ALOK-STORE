@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALOK STORE — Admin Panel</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#090611;color:#fff;font-family:Arial,sans-serif}
+.wrap{max-width:1200px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+h1{color:#ffd34e}.muted{color:#aaa3b8}.card{background:#151020;border:1px solid rgba(255,211,78,.18);border-radius:16px;padding:20px;margin-top:18px}
+button{border:0;border-radius:10px;padding:11px 16px;font-weight:800;cursor:pointer}
+.primary{background:#ffd34e;color:#120d00}.danger{background:#ff3c6c;color:#fff}.secondary{background:#21182f;color:#fff}
+input,textarea,select{width:100%;padding:11px;margin:7px 0 12px;background:#0e0a16;color:#fff;border:1px solid #332845;border-radius:9px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}.stat strong{font-size:28px;color:#ffd34e;display:block}.nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.tab{background:#21182f;color:#fff}.tab.active{background:#ffd34e;color:#120d00}
+.panel{display:none}.panel.active{display:block}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:700px){.row{grid-template-columns:1fr}}
+#login{max-width:480px;margin:10vh auto}.item{padding:14px;border:1px solid #332845;border-radius:12px;margin:10px 0;background:#100b18}
+.small{font-size:12px}.ok{color:#25d366}.err{color:#ff6b8a}
+</style>
+</head>
+<body>
+<div class="wrap" id="login">
+  <div class="card">
+    <h1>🔥 ALOK STORE</h1>
+    <h2>Admin Login</h2>
+    <p class="muted">Only the authorized store admin can access this panel.</p>
+    <button class="primary" onclick="login()">Continue with Google</button>
+    <p id="loginMsg" class="small"></p>
+  </div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <div class="top">
+    <div><h1>🔥 ALOK STORE ADMIN</h1><div class="muted" id="userEmail"></div></div>
+    <button class="secondary" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="nav">
+    <button class="tab active" data-tab="dashboard">Dashboard</button>
+    <button class="tab" data-tab="ids">IDs</button>
+    <button class="tab" data-tab="proofs">Proofs</button>
+    <button class="tab" data-tab="chat">Chat</button>
+    <button class="tab" data-tab="analytics">Analytics</button>
+    <button class="tab" data-tab="ai">AI Questions</button>
+  </div>
+
+  <section id="dashboard" class="panel active">
+    <div class="grid">
+      <div class="card stat"><span class="muted">Today Visitors</span><strong id="visitors">—</strong></div>
+      <div class="card stat"><span class="muted">Today Page Views</span><strong id="views">—</strong></div>
+      <div class="card stat"><span class="muted">Today ID Views</span><strong id="idviews">—</strong></div>
+      <div class="card stat"><span class="muted">Buy Clicks</span><strong id="buys">—</strong></div>
+      <div class="card stat"><span class="muted">Chat Clicks</span><strong id="chats">—</strong></div>
+      <div class="card stat"><span class="muted">WhatsApp Clicks</span><strong id="wa">—</strong></div>
+    </div>
+    <div class="card"><h2>Admin status</h2><p class="ok">✓ Authorized admin</p><p class="muted">Payment gateway/order management is intentionally not included.</p></div>
+  </section>
+
+  <section id="ids" class="panel">
+    <div class="card">
+      <h2>Manage IDs</h2>
+      <p class="muted">Basic listing management. Existing database columns are used where available.</p>
+      <div class="row">
+        <div><label>Title</label><input id="idTitle"></div>
+        <div><label>Price</label><input id="idPrice" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Available</label><select id="idAvailable"><option value="true">Yes</option><option value="false">No</option></select></div>
+        <div><label>Best ID</label><select id="idBest"><option value="false">No</option><option value="true">Yes</option></select></div>
+      </div>
+      <label>Description</label><textarea id="idDescription"></textarea>
+      <button class="primary" onclick="addId()">Add ID</button>
+      <p id="idMsg" class="small"></p>
+    </div>
+    <div class="card"><h2>Current IDs</h2><div id="idList">Loading…</div></div>
+  </section>
+
+  <section id="proofs" class="panel">
+    <div class="card"><h2>Proofs</h2><div id="proofList">Loading…</div></div>
+  </section>
+
+  <section id="chat" class="panel">
+    <div class="card"><h2>Customer Chat</h2><div id="chatList">Loading…</div></div>
+  </section>
+
+  <section id="analytics" class="panel">
+    <div class="card"><h2>Analytics</h2><button class="primary" onclick="loadAnalytics()">Refresh</button><pre id="analyticsOut" class="muted"></pre></div>
+  </section>
+
+  <section id="ai" class="panel">
+    <div class="card"><h2>AI Question Analytics</h2><button class="primary" onclick="loadAI()">Refresh</button><pre id="aiOut" class="muted"></pre></div>
+  </section>
+</div>
+
+<script>
+const SUPABASE_URL="https://hsvbqqexjjdxtuveysge.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_UOsrfti-CVqAz7KYLa1jKg_GKXzYhMa";
+const ADMIN_UID="327b75d0-bbc3-49fa-908a-83e6ea039b1c";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active")});
+
+async function login(){
+  const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href}});
+  if(error) document.getElementById("loginMsg").textContent=error.message;
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+async function init(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  if(session.user.id!==ADMIN_UID){await sb.auth.signOut();document.getElementById("loginMsg").textContent="This account is not authorized.";return}
+  document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";
+  document.getElementById("userEmail").textContent=session.user.email||"";
+  loadDashboard();loadIds();loadProofs();loadChat();
+}
+async function loadDashboard(){
+  const {data,error}=await sb.rpc("get_store_analytics",{p_days:1});
+  if(!error&&data&&data[0]){
+    const r=data[0]; document.getElementById("visitors").textContent=r.visitors??"—";document.getElementById("views").textContent=r.page_views??"—";document.getElementById("idviews").textContent=r.id_views??"—";document.getElementById("buys").textContent=r.buy_clicks??"—";document.getElementById("chats").textContent=r.chat_clicks??"—";document.getElementById("wa").textContent=r.whatsapp_clicks??"—";
+  }
+}
+async function loadIds(){
+  const {data,error}=await sb.from("ids").select("*").order("created_at",{ascending:false});
+  const el=document.getElementById("idList"); if(error){el.innerHTML="<p class='err'>"+error.message+"</p>";return}
+  el.innerHTML=data.map(x=>`<div class="item"><b>${esc(x.title||x.id)}</b><br><span class="muted">₹${esc(x.price??"—")} · Available: ${x.available===false?"No":"Yes"}</span><br><button class="danger" onclick="deleteId('${esc(x.id)}')">Delete</button></div>`).join("")||"<p class='muted'>No IDs found.</p>";
+}
+async function addId(){
+  const row={title:document.getElementById("idTitle").value.trim(),price:Number(document.getElementById("idPrice").value||0),available:document.getElementById("idAvailable").value==="true"};
+  const {error}=await sb.from("ids").insert(row);document.getElementById("idMsg").textContent=error?error.message:"ID added.";if(!error)loadIds();
+}
+async function deleteId(id){if(!confirm("Delete this ID?"))return;const {error}=await sb.from("ids").delete().eq("id",id);if(error)alert(error.message);else loadIds()}
+async function loadProofs(){const {data,error}=await sb.from("proofs").select("*").order("created_at",{ascending:false}).limit(50);document.getElementById("proofList").innerHTML=error?`<p class="err">${error.message}</p>`:(data||[]).map(x=>`<div class="item"><b>${esc(x.title)}</b><br><a href="${esc(x.image_url)}" target="_blank">Open proof</a></div>`).join("")||"<p class='muted'>No proofs.</p>"}
+async function loadChat(){const el=document.getElementById("chatList");const {data,error}=await sb.from("chat_conversations").select("*").order("created_at",{ascending:false}).limit(50);el.innerHTML=error?`<p class="err">${error.message}</p>`:(data||[]).map(x=>`<div class="item"><b>${esc(x.id)}</b><br><span class="muted">${esc(JSON.stringify(x))}</span></div>`).join("")||"<p class='muted'>No conversations.</p>"}
+async function loadAnalytics(){const {data,error}=await sb.rpc("get_store_analytics",{p_days:30});document.getElementById("analyticsOut").textContent=error?error.message:JSON.stringify(data,null,2)}
+async function loadAI(){const {data,error}=await sb.rpc("get_ai_question_analytics",{p_days:30});document.getElementById("aiOut").textContent=error?error.message:JSON.stringify(data,null,2)}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+sb.auth.onAuthStateChange(()=>init());init();
+</script>
+</body>
+</html>
